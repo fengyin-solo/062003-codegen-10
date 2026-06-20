@@ -10,6 +10,15 @@ import {
   calcProfit,
   calcTraineeScore,
   getRelationship,
+  getAvailableChallengePhase,
+  getEligibleTrainees,
+  canStartChallengeSignup,
+  getDaysUntilNextChallenge,
+  startChallengeSignup,
+  signupForChallenge,
+  cancelChallengeSignup,
+  startChallenge,
+  settleChallenge,
 } from '../utils/gameLogic'
 import { saveToSlot } from '../utils/storage'
 
@@ -112,6 +121,76 @@ export function useGame() {
     return getRelationship(state.value.relationships, idA, idB)
   }
 
+  function handleStartChallengeSignup(phaseId) {
+    if (!state.value) return null
+    const result = startChallengeSignup(state.value, phaseId)
+    if (result.success) {
+      state.value = result.state
+      autoSave()
+    }
+    return result
+  }
+
+  function handleSignupChallenge(traineeId) {
+    if (!state.value) return null
+    const result = signupForChallenge(state.value, traineeId)
+    if (result.success) {
+      state.value = result.state
+      autoSave()
+    }
+    return result
+  }
+
+  function handleCancelSignupChallenge(traineeId) {
+    if (!state.value) return null
+    const result = cancelChallengeSignup(state.value, traineeId)
+    if (result.success) {
+      state.value = result.state
+      autoSave()
+    }
+    return result
+  }
+
+  function handleStartChallenge() {
+    if (!state.value) return null
+    const result = startChallenge(state.value)
+    if (result.success) {
+      state.value = result.state
+      autoSave()
+    }
+    return result
+  }
+
+  function handleSettleChallenge() {
+    if (!state.value) return null
+    const result = settleChallenge(state.value)
+    if (result.success) {
+      state.value = result.state
+      autoSave()
+    }
+    return result
+  }
+
+  function getAvailablePhase() {
+    if (!state.value) return null
+    return getAvailableChallengePhase(state.value)
+  }
+
+  function getEligible(phaseId) {
+    if (!state.value) return []
+    return getEligibleTrainees(state.value, phaseId)
+  }
+
+  function canSignup() {
+    if (!state.value) return false
+    return canStartChallengeSignup(state.value)
+  }
+
+  function daysUntilChallenge() {
+    if (!state.value) return 0
+    return getDaysUntilNextChallenge(state.value)
+  }
+
   return {
     state,
     currentSlot,
@@ -134,5 +213,14 @@ export function useGame() {
     getRatingResults: () => (state.value ? getRatingResults(state.value) : []),
     calcTraineeScore,
     autoSave,
+    handleStartChallengeSignup,
+    handleSignupChallenge,
+    handleCancelSignupChallenge,
+    handleStartChallenge,
+    handleSettleChallenge,
+    getAvailablePhase,
+    getEligible,
+    canSignup,
+    daysUntilChallenge,
   }
 }

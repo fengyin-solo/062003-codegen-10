@@ -18,6 +18,10 @@
     :can-end-day="canEndDay()"
     :rating-results="getRatingResults()"
     :calc-score="calcTraineeScore"
+    :get-available-phase="getAvailablePhase"
+    :get-eligible="getEligible"
+    :can-signup="canSignup"
+    :days-until-challenge="daysUntilChallenge"
     @back="backToMenu"
     @toggle-theme="toggleTheme"
     @set-schedule="setSchedule"
@@ -27,6 +31,11 @@
     @debut="onDebut"
     @resolve-poaching="handlePoaching"
     @release-single="onReleaseSingle"
+    @start-challenge-signup="onStartChallengeSignup"
+    @signup-challenge="onSignupChallenge"
+    @cancel-signup-challenge="onCancelSignupChallenge"
+    @start-challenge="onStartChallenge"
+    @settle-challenge="onSettleChallenge"
   />
 </template>
 
@@ -60,6 +69,15 @@ const {
   backToMenu,
   getRatingResults,
   calcTraineeScore,
+  handleStartChallengeSignup,
+  handleSignupChallenge,
+  handleCancelSignupChallenge,
+  handleStartChallenge,
+  handleSettleChallenge,
+  getAvailablePhase,
+  getEligible,
+  canSignup,
+  daysUntilChallenge,
 } = useGame()
 
 onMounted(() => {
@@ -96,5 +114,29 @@ function onReleaseSingle(groupId) {
   if (result && !result.success) {
     alert(result.message)
   }
+}
+
+function onStartChallengeSignup(phaseId, callback) {
+  const result = handleStartChallengeSignup(phaseId)
+  if (callback) callback(result)
+}
+
+function onSignupChallenge(traineeId, callback) {
+  const result = handleSignupChallenge(traineeId)
+  if (callback) callback(result)
+}
+
+function onCancelSignupChallenge(traineeId) {
+  handleCancelSignupChallenge(traineeId)
+}
+
+function onStartChallenge(callback) {
+  const result = handleStartChallenge()
+  if (callback) callback(result)
+}
+
+function onSettleChallenge(callback) {
+  const result = handleSettleChallenge()
+  if (callback) callback(result)
 }
 </script>

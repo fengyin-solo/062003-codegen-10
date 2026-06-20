@@ -27,13 +27,24 @@
 
     <div v-if="score !== null" class="score">
       综合评分 <strong>{{ score }}</strong>
-      <span v-if="trainee.status === 'trainee'" class="debut-hint">
-        {{ score >= debutThreshold ? '✓ 可出道' : `需 ${debutThreshold}` }}
+      <span v-if="trainee.status === 'trainee'" class="debut-hint" :class="{ ok: score >= debutThreshold }">
+        {{ score >= debutThreshold ? '✓ 评分达标' : `需${debutThreshold}分` }}
+      </span>
+    </div>
+
+    <div class="reputation-row">
+      <span class="rep-label">⭐ 声望</span>
+      <strong>{{ trainee.reputation }}</strong>
+      <span v-if="trainee.status === 'trainee'" class="rep-hint" :class="{ ok: trainee.reputation >= repThreshold }">
+        {{ trainee.reputation >= repThreshold ? '✓ 声望达标' : `需${repThreshold}` }}
       </span>
     </div>
 
     <div v-if="trainee.illnessDays > 0" class="illness">🤒 休养中 ({{ trainee.illnessDays }}天)</div>
-    <div v-if="trainee.fans > 0" class="fans">个人粉丝 {{ trainee.fans.toLocaleString() }}</div>
+    <div v-if="trainee.fans > 0" class="fans">👥 个人粉丝 {{ trainee.fans.toLocaleString() }}</div>
+    <div v-if="trainee.challengeParticipations > 0" class="challenge-stat">
+      🏆 参赛 {{ trainee.challengeParticipations }} 次 / 冠军 {{ trainee.challengeWins }} 次
+    </div>
   </div>
 </template>
 
@@ -49,6 +60,7 @@ const props = defineProps({
 const statKeys = GAME_CONFIG.stats
 const statLabels = GAME_CONFIG.statLabels
 const debutThreshold = GAME_CONFIG.rating.debutScoreThreshold
+const repThreshold = GAME_CONFIG.rating.debutReputationThreshold
 
 const statusLabel = computed(() => {
   const map = { trainee: '练习生', debuted: '已出道', left: '已离开' }
@@ -141,12 +153,51 @@ const statusClass = computed(() => ({
 .debut-hint {
   margin-left: 0.5rem;
   font-size: 0.75rem;
-  color: var(--accent);
+  color: var(--text-muted);
 }
 
-.illness, .fans {
+.debut-hint.ok {
+  color: var(--success);
+}
+
+.reputation-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.rep-label {
+  color: var(--text-muted);
+}
+
+.rep-hint {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.rep-hint.ok {
+  color: var(--success);
+}
+
+.illness {
   margin-top: 0.35rem;
   font-size: 0.8rem;
   color: var(--warning);
+}
+
+.fans {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.challenge-stat {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 </style>

@@ -24,6 +24,11 @@ export function createInitialGameState() {
     pendingRating: false,
     gameStatus: 'playing',
     lastSingleDay: {},
+    currentChallenge: null,
+    challengeSignups: [],
+    pendingChallengeResult: false,
+    lastChallengeDay: 0,
+    challengeHistory: [],
   }
 }
 
@@ -44,6 +49,9 @@ function createTrainee(name, index) {
     poachResist: randInt(40, 70),
     fans: 0,
     singlesReleased: 0,
+    reputation: 0,
+    challengeWins: 0,
+    challengeParticipations: 0,
   }
 }
 
@@ -429,6 +437,9 @@ export function debutGroup(state, memberIds, groupName) {
     if (calcTraineeScore(m) < CFG.rating.debutScoreThreshold) {
       return { success: false, message: `${m.name} 综合评分未达标（需 ≥${CFG.rating.debutScoreThreshold}）` }
     }
+    if (m.reputation < CFG.rating.debutReputationThreshold) {
+      return { success: false, message: `${m.name} 声望不足（需 ≥${CFG.rating.debutReputationThreshold}）` }
+    }
   }
 
   const groupId = `g_${Date.now()}`
@@ -551,7 +562,292 @@ export function getRatingResults(state) {
     .map((t) => ({
       ...t,
       score: calcTraineeScore(t),
-      canDebut: calcTraineeScore(t) >= CFG.rating.debutScoreThreshold,
+      canDebut:
+        calcTraineeScore(t) >= CFG.rating.debutScoreThreshold &&
+        t.reputation >= CFG.rating.debutReputationThreshold,
     }))
     .sort((a, b) => b.score - a.score)
+}
+
+export function getAvailableChallengePhase(state) {
+  const trainees = getActiveTrainees(state).filter((t) => t.status === 'trainee')
+  if (trainees.length === 0) return null
+
+  const avgReputation = trainees.reduce((s, t) => s + t.reputation, 0) / trainees.length
+
+  for (let i = CFG.challenges.phases.length - 1; i >= 0; i--) {
+    const phase = CFG.challenges.phases[i]
+    const eligible = trainees.filter(
+      (t) => t.reputation >= phase.minReputation && t.reputation < phase.maxReputation
+    )
+    if (eligible.length > 0) {
+      return phase
+    }
+  }
+  return CFG.challenges.phases[0]
+}
+
+export function getEligibleTrainees(state, phaseId) {
+  const phase = CFG.challenges.phases.find((p) => p.id === phaseId)
+  if (!phase) return []
+  return getActiveTrainees(state)
+    .filter((t) => t.status === 'trainee')
+    .filter((t) => t.reputation >= phase.minReputation && t.reputation < phase.maxReputation)
+    .filter((t) => t.illnessDays === 0)
+    .sort((a, b) => calcTraineeScore(b) - calcTraineeScore(a))
+}
+
+export function canStartChallengeSignup(state) {
+  if (state.currentChallenge) return false
+  if (state.pendingChallengeResult) return false
+  const daysSinceLast = state.day - state.lastChallengeDay
+  return daysSinceLast >= CFG.challenges.interval
+}
+
+export function getDaysUntilNextChallenge(state) {
+  if (state.currentChallenge || state.pendingChallengeResult) return 0
+  const daysSinceLast = state.day - state.lastChallengeDay
+  return Math.max(0, CFG.challenges.interval - daysSinceLast)
+}
+
+export function startChallengeSignup(state, phaseId) {
+  const phase = CFG.challenges.phases.find((p) => p.id === phaseId)
+  if (!phase) return { success: false, message: '赛事不存在' }
+  if (!canStartChallengeSignup(state)) {
+    return { success: false, message: '当前无法开启报名' }
+  }
+
+  const eligible = getEligibleTrainees(state, phaseId)
+  if (eligible.length === 0) {
+    return { success: false, message: '没有符合条件的练习生' }
+  }
+
+  return {
+    success: true,
+    state: {
+      ...state,
+      currentChallenge: {
+        phaseId,
+        phaseName: phase.name,
+        phaseTier: phase.tier,
+        status: 'signup',
+        participants: [],
+      },
+      challengeSignups: [],
+    },
+  }
+}
+
+export function signupForChallenge(state, traineeId) {
+  if (!state.currentChallenge || state.currentChallenge.status !== 'signup') {
+    return { success: false, message: '当前不在报名阶段' }
+  }
+
+  const trainee = state.trainees.find((t) => t.id === traineeId)
+  if (!trainee) return { success: false, message: '练习生不存在' }
+  if (trainee.status !== 'trainee') return { success: false, message: '仅练习生可参赛' }
+  if (trainee.illnessDays > 0) return { success: false, message: '休养中无法参赛' }
+  if (state.challengeSignups.includes(traineeId)) {
+    return { success: false, message: '已报名' }
+  }
+
+  if (state.money < CFG.challenges.entryFee) {
+    return { success: false, message: '资金不足' }
+  }
+
+  const phase = CFG.challenges.phases.find((p) => p.id === state.currentChallenge.phaseId)
+  if (phase) {
+    if (
+      trainee.reputation < phase.minReputation ||
+      trainee.reputation >= phase.maxReputation
+    ) {
+      return { success: false, message: '声望不符合要求' }
+    }
+  }
+
+  return {
+    success: true,
+    state: {
+      ...state,
+      money: state.money - CFG.challenges.entryFee,
+      totalExpenses: state.totalExpenses + CFG.challenges.entryFee,
+      challengeSignups: [...state.challengeSignups, traineeId],
+      logs: [
+        ...state.logs,
+        { day: state.day, text: `${trainee.name} 报名参加「${state.currentChallenge.phaseName}」！` },
+      ],
+    },
+  }
+}
+
+export function cancelChallengeSignup(state, traineeId) {
+  if (!state.currentChallenge || state.currentChallenge.status !== 'signup') {
+    return { success: false, message: '当前不在报名阶段' }
+  }
+  if (!state.challengeSignups.includes(traineeId)) {
+    return { success: false, message: '未报名' }
+  }
+
+  const trainee = state.trainees.find((t) => t.id === traineeId)
+
+  return {
+    success: true,
+    state: {
+      ...state,
+      money: state.money + CFG.challenges.entryFee,
+      totalExpenses: state.totalExpenses - CFG.challenges.entryFee,
+      challengeSignups: state.challengeSignups.filter((id) => id !== traineeId),
+      logs: trainee
+        ? [
+            ...state.logs,
+            { day: state.day, text: `${trainee.name} 取消了挑战赛报名。` },
+          ]
+        : state.logs,
+    },
+  }
+}
+
+function generateNpcParticipants(phase, count) {
+  const npcs = []
+  const npcNames = [
+    '王雨桐', '李诗涵', '张梦瑶', '刘思琪', '陈雨萱',
+    '杨紫涵', '黄诗琪', '周佳怡', '吴雨欣', '郑雅文',
+    '孙若曦', '朱婉清', '马思远', '胡静怡', '林婉如',
+  ]
+  const shuffled = [...npcNames].sort(() => Math.random() - 0.5)
+
+  const repRange = [phase.minReputation, Math.min(phase.maxReputation - 1, phase.minReputation + 30)]
+  const scoreBase = 35 + phase.tier * 12
+
+  for (let i = 0; i < count && i < shuffled.length; i++) {
+    const stats = {}
+    for (const key of CFG.stats) {
+      stats[key] = randInt(scoreBase - 10, scoreBase + 15)
+    }
+    npcs.push({
+      id: `npc_${Date.now()}_${i}`,
+      name: shuffled[i],
+      stats,
+      reputation: randInt(repRange[0], repRange[1]),
+      isNpc: true,
+    })
+  }
+  return npcs
+}
+
+export function startChallenge(state) {
+  if (!state.currentChallenge || state.currentChallenge.status !== 'signup') {
+    return { success: false, message: '当前不在报名阶段' }
+  }
+  if (state.challengeSignups.length === 0) {
+    return { success: false, message: '至少需要1名练习生报名' }
+  }
+
+  const phase = CFG.challenges.phases.find((p) => p.id === state.currentChallenge.phaseId)
+  if (!phase) return { success: false, message: '赛事不存在' }
+
+  const playerParticipants = state.challengeSignups.map((id) => {
+    const t = state.trainees.find((tr) => tr.id === id)
+    return { ...t, score: calcTraineeScore(t), isNpc: false }
+  })
+
+  const npcCount = phase.participants - playerParticipants.length
+  const npcParticipants = generateNpcParticipants(phase, Math.max(2, npcCount)).map((n) => ({
+    ...n,
+    score: calcTraineeScore(n),
+  }))
+
+  const allParticipants = [...playerParticipants, ...npcParticipants]
+    .map((p) => ({
+      ...p,
+      finalScore: p.score + randInt(-8, 12),
+    }))
+    .sort((a, b) => b.finalScore - a.finalScore)
+
+  return {
+    success: true,
+    state: {
+      ...state,
+      currentChallenge: {
+        ...state.currentChallenge,
+        status: 'result',
+        participants: allParticipants,
+      },
+      pendingChallengeResult: true,
+    },
+  }
+}
+
+export function settleChallenge(state) {
+  if (!state.currentChallenge || !state.pendingChallengeResult) {
+    return { success: false, message: '没有待结算的赛事' }
+  }
+
+  const phase = CFG.challenges.phases.find((p) => p.id === state.currentChallenge.phaseId)
+  if (!phase) return { success: false, message: '赛事不存在' }
+
+  const participants = state.currentChallenge.participants
+  const logs = [...state.logs]
+  let totalMoneyReward = 0
+  let totalFansGain = 0
+
+  const trainees = state.trainees.map((t) => ({ ...t, stats: { ...t.stats } }))
+
+  logs.push({
+    day: state.day,
+    text: `🏆「${state.currentChallenge.phaseName}」结果出炉！`,
+  })
+
+  participants.forEach((p, index) => {
+    const rank = index + 1
+    const reward = phase.rewards[rank] || phase.rewards[Object.keys(phase.rewards).length]
+
+    if (!p.isNpc) {
+      const trainee = trainees.find((t) => t.id === p.id)
+      if (trainee) {
+        trainee.reputation += reward.reputation
+        trainee.fans += reward.fans
+        trainee.challengeParticipations += 1
+        if (rank === 1) trainee.challengeWins += 1
+
+        totalMoneyReward += reward.money
+        totalFansGain += reward.fans
+
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `第${rank}名`
+        logs.push({
+          day: state.day,
+          text: `  ${medal} ${trainee.name}：奖金 ¥${reward.money}，声望 +${reward.reputation}，粉丝 +${reward.fans}`,
+        })
+      }
+    }
+  })
+
+  const newChallenge = {
+    phaseId: state.currentChallenge.phaseId,
+    phaseName: state.currentChallenge.phaseName,
+    day: state.day,
+    participants: participants.map((p) => ({
+      id: p.id,
+      name: p.name,
+      score: p.finalScore,
+      isNpc: p.isNpc,
+    })),
+  }
+
+  return {
+    success: true,
+    state: {
+      ...state,
+      money: state.money + totalMoneyReward,
+      totalRevenue: state.totalRevenue + totalMoneyReward,
+      fans: state.fans + totalFansGain,
+      trainees,
+      currentChallenge: null,
+      challengeSignups: [],
+      pendingChallengeResult: false,
+      lastChallengeDay: state.day,
+      challengeHistory: [...state.challengeHistory, newChallenge],
+      logs,
+    },
+  }
 }

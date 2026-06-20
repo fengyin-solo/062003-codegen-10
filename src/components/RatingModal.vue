@@ -4,12 +4,17 @@
       <h3>📊 周末内部评级</h3>
       <p class="desc">综合评分达标（≥{{ threshold }}）的练习生可组队出道</p>
 
+      <p class="reputation-note">
+        💡 出道需同时满足：评分 ≥{{ threshold }} 分 且 声望 ≥{{ repThreshold }}
+      </p>
+
       <table class="rating-table">
         <thead>
           <tr>
             <th>排名</th>
             <th>姓名</th>
             <th>评分</th>
+            <th>声望</th>
             <th>状态</th>
           </tr>
         </thead>
@@ -18,6 +23,7 @@
             <td>{{ i + 1 }}</td>
             <td>{{ t.name }}</td>
             <td><strong>{{ t.score }}</strong></td>
+            <td>{{ t.reputation }}</td>
             <td>
               <span v-if="t.canDebut" class="ok">✓ 可出道</span>
               <span v-else class="no">未达标</span>
@@ -43,6 +49,7 @@ defineProps({
 defineEmits(['close', 'debut'])
 
 const threshold = GAME_CONFIG.rating.debutScoreThreshold
+const repThreshold = GAME_CONFIG.rating.debutReputationThreshold
 </script>
 
 <style scoped>
@@ -66,6 +73,15 @@ const threshold = GAME_CONFIG.rating.debutScoreThreshold
 .desc {
   color: var(--text-secondary);
   font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.reputation-note {
+  background: var(--accent-soft);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--accent);
   margin-bottom: 1rem;
 }
 

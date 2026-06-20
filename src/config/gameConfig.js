@@ -111,6 +111,7 @@ export const GAME_CONFIG = {
   rating: {
     interval: 7,
     debutScoreThreshold: 58,  // 综合评分达标可出道
+    debutReputationThreshold: 30, // 出道所需最低声望
     minGroupSize: 2,
     maxGroupSize: 5,
     scoreWeights: {
@@ -120,6 +121,68 @@ export const GAME_CONFIG = {
       looks: 0.2,
       charm: 0.2,
     },
+  },
+
+  // ── 训练营挑战赛 ──
+  challenges: {
+    interval: 30, // 每30天举办一次
+    entryFee: 2000, // 报名费用
+    phases: [
+      {
+        id: 'rookie',
+        name: '新秀挑战赛',
+        tier: 1,
+        minReputation: 0,
+        maxReputation: 50,
+        participants: 8,
+        rewards: {
+          1: { money: 5000, reputation: 20, fans: 500 },
+          2: { money: 3000, reputation: 15, fans: 300 },
+          3: { money: 1500, reputation: 10, fans: 150 },
+          4: { money: 800, reputation: 6, fans: 80 },
+          5: { money: 500, reputation: 4, fans: 50 },
+          6: { money: 300, reputation: 2, fans: 30 },
+          7: { money: 200, reputation: 1, fans: 20 },
+          8: { money: 100, reputation: 1, fans: 10 },
+        },
+      },
+      {
+        id: 'rising',
+        name: '新星选拔赛',
+        tier: 2,
+        minReputation: 25,
+        maxReputation: 100,
+        participants: 8,
+        rewards: {
+          1: { money: 12000, reputation: 35, fans: 1200 },
+          2: { money: 8000, reputation: 25, fans: 800 },
+          3: { money: 4000, reputation: 18, fans: 400 },
+          4: { money: 2000, reputation: 12, fans: 200 },
+          5: { money: 1200, reputation: 8, fans: 120 },
+          6: { money: 800, reputation: 5, fans: 80 },
+          7: { money: 500, reputation: 3, fans: 50 },
+          8: { money: 300, reputation: 2, fans: 30 },
+        },
+      },
+      {
+        id: 'elite',
+        name: '精英训练营杯',
+        tier: 3,
+        minReputation: 70,
+        maxReputation: 999,
+        participants: 8,
+        rewards: {
+          1: { money: 25000, reputation: 50, fans: 3000 },
+          2: { money: 18000, reputation: 38, fans: 2000 },
+          3: { money: 10000, reputation: 28, fans: 1200 },
+          4: { money: 5000, reputation: 18, fans: 600 },
+          5: { money: 3000, reputation: 12, fans: 350 },
+          6: { money: 2000, reputation: 8, fans: 200 },
+          7: { money: 1200, reputation: 5, fans: 120 },
+          8: { money: 800, reputation: 3, fans: 80 },
+        },
+      },
+    ],
   },
 
   // ── 单曲发行 ──
