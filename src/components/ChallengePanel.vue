@@ -12,7 +12,10 @@
 
       <div v-if="currentChallenge.status === 'signup'" class="challenge-status">
         <span class="status signup">报名中</span>
-        <span class="signup-count">已报名: {{ signups.length }} 人</span>
+        <span class="signup-count" :class="{ full: isFull }">
+          {{ signups.length }}/{{ phaseParticipants }} 人
+          <span v-if="isFull" class="full-label">· 已满员</span>
+        </span>
       </div>
 
       <div v-if="currentChallenge.status === 'result'" class="challenge-status">
@@ -53,7 +56,10 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+import { GAME_CONFIG } from '../config/gameConfig'
+
+const props = defineProps({
   currentChallenge: Object,
   signups: Array,
   daysUntil: Number,
@@ -63,6 +69,16 @@ defineProps({
 })
 
 defineEmits(['open-challenge', 'start-signup'])
+
+const phaseParticipants = computed(() => {
+  if (!props.currentChallenge) return 0
+  const phase = GAME_CONFIG.challenges.phases.find(p => p.id === props.currentChallenge.phaseId)
+  return phase?.participants || 0
+})
+
+const isFull = computed(() => {
+  return phaseParticipants.value > 0 && props.signups.length >= phaseParticipants.value
+})
 </script>
 
 <style scoped>
@@ -131,6 +147,15 @@ defineEmits(['open-challenge', 'start-signup'])
 
 .signup-count {
   color: var(--text-muted);
+}
+
+.signup-count.full {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.full-label {
+  margin-left: 0.25rem;
 }
 
 .no-challenge {

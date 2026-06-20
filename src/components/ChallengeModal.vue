@@ -14,6 +14,10 @@
             T{{ challenge?.phaseTier }}
           </span>
           <span>声望范围: {{ phase?.minReputation }} - {{ phase?.maxReputation }}</span>
+          <span class="slot-info" :class="{ full: isFull }">
+            报名进度: {{ signups.length }} / {{ phase?.participants }}
+            <span v-if="isFull" class="full-tag">· 已满员</span>
+          </span>
         </div>
 
         <h4>可报名练习生</h4>
@@ -36,7 +40,7 @@
                 :disabled="!canSignup(t)"
                 @click="$emit('signup', t.id)"
               >
-                报名
+                {{ isFull ? '已满员' : '报名' }}
               </button>
               <button
                 v-else
@@ -60,14 +64,14 @@
             :disabled="signups.length === 0"
             @click="$emit('start')"
           >
-            开始比赛 ({{ signups.length }} 人)
+            开始比赛 ({{ signups.length }}/{{ phase?.participants }} 人)
           </button>
           <button class="btn ghost" @click="$emit('close')">关闭</button>
         </div>
       </div>
 
       <div v-if="challenge?.status === 'result'" class="result-phase">
-        <p class="desc">比赛结果已出炉！</p>
+        <p class="desc">比赛结果已出炉！共 {{ phase?.participants }} 人参赛</p>
 
         <table class="result-table">
           <thead>
@@ -96,8 +100,11 @@
               </td>
               <td><strong>{{ p.finalScore }}</strong></td>
               <td class="reward-cell">
-                <span class="reward-item">💰 {{ getReward(i + 1).money }}</span>
-                <span class="reward-item">⭐ {{ getReward(i + 1).reputation }}</span>
+                <template v-if="getReward(i + 1)">
+                  <span class="reward-item">💰 {{ getReward(i + 1).money }}</span>
+                  <span class="reward-item">⭐ {{ getReward(i + 1).reputation }}</span>
+                </template>
+                <span v-else class="reward-item muted">—</span>
               </td>
             </tr>
           </tbody>
@@ -135,12 +142,20 @@ const phase = computed(() => {
   return GAME_CONFIG.challenges.phases.find(p => p.id === props.challenge.phaseId)
 })
 
+const isFull = computed(() => {
+  if (!phase.value) return false
+  return props.signups.length >= phase.value.participants
+})
+
 const sortedParticipants = computed(() => {
-  if (!props.challenge?.participants) return []
-  return [...props.challenge.participants].sort((a, b) => b.finalScore - a.finalScore)
+  if (!props.challenge?.participants || !phase.value) return []
+  return [...props.challenge.participants]
+    .sort((a, b) => b.finalScore - a.finalScore)
+    .slice(0, phase.value.participants)
 })
 
 function canSignup(trainee) {
+  if (isFull.value && !props.signups.includes(trainee.id)) return false
   if (props.money < entryFee) return false
   if (trainee.illnessDays > 0) return false
   if (phase.value) {
@@ -151,9 +166,10 @@ function canSignup(trainee) {
 }
 
 function getReward(rank) {
-  if (!phase.value) return { money: 0, reputation: 0, fans: 0 }
-  return phase.value.rewards[rank] || 
-         phase.value.rewards[Object.keys(phase.value.rewards).length]
+  if (!phase.value) return null
+  const maxRank = Object.keys(phase.value.rewards).length
+  if (rank < 1 || rank > maxRank) return null
+  return phase.value.rewards[rank] || null
 }
 </script>
 
@@ -195,6 +211,20 @@ function getReward(rank) {
   margin-bottom: 1rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.slot-info {
+  color: var(--text-muted);
+}
+
+.slot-info.full {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.full-tag {
+  margin-left: 0.25rem;
 }
 
 .tier-badge {
@@ -339,5 +369,9 @@ h4 {
 
 .reward-item {
   font-size: 0.8rem;
+}
+
+.reward-item.muted {
+  color: var(--text-muted);
 }
 </style>

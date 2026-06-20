@@ -643,6 +643,13 @@ export function signupForChallenge(state, traineeId) {
     return { success: false, message: '当前不在报名阶段' }
   }
 
+  const phase = CFG.challenges.phases.find((p) => p.id === state.currentChallenge.phaseId)
+  if (!phase) return { success: false, message: '赛事不存在' }
+
+  if (state.challengeSignups.length >= phase.participants) {
+    return { success: false, message: `报名人数已满（${phase.participants}人）` }
+  }
+
   const trainee = state.trainees.find((t) => t.id === traineeId)
   if (!trainee) return { success: false, message: '练习生不存在' }
   if (trainee.status !== 'trainee') return { success: false, message: '仅练习生可参赛' }
@@ -655,14 +662,11 @@ export function signupForChallenge(state, traineeId) {
     return { success: false, message: '资金不足' }
   }
 
-  const phase = CFG.challenges.phases.find((p) => p.id === state.currentChallenge.phaseId)
-  if (phase) {
-    if (
-      trainee.reputation < phase.minReputation ||
-      trainee.reputation >= phase.maxReputation
-    ) {
-      return { success: false, message: '声望不符合要求' }
-    }
+  if (
+    trainee.reputation < phase.minReputation ||
+    trainee.reputation >= phase.maxReputation
+  ) {
+    return { success: false, message: '声望不符合要求' }
   }
 
   return {
@@ -709,24 +713,26 @@ export function cancelChallengeSignup(state, traineeId) {
 
 function generateNpcParticipants(phase, count) {
   const npcs = []
-  const npcNames = [
+  const baseNames = [
     '王雨桐', '李诗涵', '张梦瑶', '刘思琪', '陈雨萱',
     '杨紫涵', '黄诗琪', '周佳怡', '吴雨欣', '郑雅文',
     '孙若曦', '朱婉清', '马思远', '胡静怡', '林婉如',
+    '徐若琳', '何梦瑶', '罗思琪', '梁婉清', '宋雨桐',
   ]
-  const shuffled = [...npcNames].sort(() => Math.random() - 0.5)
+  const shuffled = [...baseNames].sort(() => Math.random() - 0.5)
 
   const repRange = [phase.minReputation, Math.min(phase.maxReputation - 1, phase.minReputation + 30)]
   const scoreBase = 35 + phase.tier * 12
 
-  for (let i = 0; i < count && i < shuffled.length; i++) {
+  for (let i = 0; i < count; i++) {
     const stats = {}
     for (const key of CFG.stats) {
       stats[key] = randInt(scoreBase - 10, scoreBase + 15)
     }
+    const name = shuffled[i % shuffled.length] + (i >= shuffled.length ? String(i - shuffled.length + 2) : '')
     npcs.push({
-      id: `npc_${Date.now()}_${i}`,
-      name: shuffled[i],
+      id: `npc_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+      name,
       stats,
       reputation: randInt(repRange[0], repRange[1]),
       isNpc: true,
@@ -746,13 +752,19 @@ export function startChallenge(state) {
   const phase = CFG.challenges.phases.find((p) => p.id === state.currentChallenge.phaseId)
   if (!phase) return { success: false, message: '赛事不存在' }
 
-  const playerParticipants = state.challengeSignups.map((id) => {
+  let playerParticipants = state.challengeSignups.map((id) => {
     const t = state.trainees.find((tr) => tr.id === id)
     return { ...t, score: calcTraineeScore(t), isNpc: false }
   })
 
+  if (playerParticipants.length > phase.participants) {
+    playerParticipants = playerParticipants
+      .sort((a, b) => b.score - a.score)
+      .slice(0, phase.participants)
+  }
+
   const npcCount = phase.participants - playerParticipants.length
-  const npcParticipants = generateNpcParticipants(phase, Math.max(2, npcCount)).map((n) => ({
+  const npcParticipants = generateNpcParticipants(phase, Math.max(0, npcCount)).map((n) => ({
     ...n,
     score: calcTraineeScore(n),
   }))
@@ -763,6 +775,7 @@ export function startChallenge(state) {
       finalScore: p.score + randInt(-8, 12),
     }))
     .sort((a, b) => b.finalScore - a.finalScore)
+    .slice(0, phase.participants)
 
   return {
     success: true,
@@ -786,7 +799,12 @@ export function settleChallenge(state) {
   const phase = CFG.challenges.phases.find((p) => p.id === state.currentChallenge.phaseId)
   if (!phase) return { success: false, message: '赛事不存在' }
 
+  const maxRank = Object.keys(phase.rewards).length
   const participants = state.currentChallenge.participants
+    .slice()
+    .sort((a, b) => b.finalScore - a.finalScore)
+    .slice(0, phase.participants)
+
   const logs = [...state.logs]
   let totalMoneyReward = 0
   let totalFansGain = 0
@@ -800,7 +818,10 @@ export function settleChallenge(state) {
 
   participants.forEach((p, index) => {
     const rank = index + 1
-    const reward = phase.rewards[rank] || phase.rewards[Object.keys(phase.rewards).length]
+    if (rank > maxRank) return
+
+    const reward = phase.rewards[rank]
+    if (!reward) return
 
     if (!p.isNpc) {
       const trainee = trainees.find((t) => t.id === p.id)
